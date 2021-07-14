@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     // set the PRNG seed with the device random number
     std::random_device rd;
     unsigned int seed = rd();
-    seed = 1234;
+    // seed = 1234;
     // initialize the PRNGs
     curandState *devStates ;
     cudaMalloc((void **)&devStates, ptlsNum*sizeof(curandState)) ;
