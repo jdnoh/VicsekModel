@@ -5,15 +5,12 @@
 
 int main(int argc, char *argv[])
 {
-    if(argc!=4) error_output("L tmax delt") ;
+    if(argc!=4) error_output("command L tmax delt") ;
     const int    Lsize  = atoi(argv[1]);
     const int    tmax   = atoi(argv[2]);
     const int    delt   = atoi(argv[3]);
     const float  rho    = 1.0;
     const float  speed  = 0.5;
-
-    float noise = 0.5;
-    float noise_pi = noise*ppi;
 
     // total number of particles
     const  int   ptlsNum = (int)(Lsize*Lsize*rho+0.01) ;
@@ -54,35 +51,41 @@ int main(int argc, char *argv[])
     cudaMalloc((void **)&devStates, ptlsNum*sizeof(curandState)) ;
     initialize_prng<<<nBlocks, nThreads>>>(ptlsNum, seed, devStates) ;
 
-    // random initial configuration
-    init_random_config<<<nBlocks,nThreads>>>(devStates, Lsize, 
-            ptlsNum, devPtls) ;
+    float noise = 0.5;
+    printf("# L noise t Ox=<cos angle> Oy=<sin angle>\n"); 
+    // for(float noise=0.1; noise<1.0; noise += 0.1) {
+        float noise_pi = noise*ppi;
 
-    for(int t=1; t<=tmax; t++) {
-        // position and angle update
-        particles_move<<<nBlocks, nThreads>>>(devPtls, Lsize, ptlsNum,
-                speed); 
+        // random initial configuration
+        init_random_config<<<nBlocks,nThreads>>>(devStates, Lsize, 
+                ptlsNum, devPtls) ;
 
-        // linked list
-        linked_list(devPtls, Lsize, ptlsNum, cllsNum, devCell, devHead, devTail,
-                nBlocks, nThreads);
+        for(int t=1; t<=tmax; t++) {
+            // position and angle update
+            particles_move<<<nBlocks, nThreads>>>(devPtls, Lsize, ptlsNum,
+                    speed); 
+
+            // linked list
+            linked_list(devPtls, Lsize, ptlsNum, cllsNum, devCell, devHead, devTail,
+                    nBlocks, nThreads);
         
-        // direction angle of local average velocity
-        local_average_velocity<<<nBlocks, nThreads>>>(devPtls,
-                Lsize, ptlsNum, devAngTmp,devHead, devTail);
+            // direction angle of local average velocity
+            local_average_velocity<<<nBlocks, nThreads>>>(devPtls,
+                    Lsize, ptlsNum, devAngTmp,devHead, devTail);
 
-        // rotate the moving direction
-        particles_rotate<<<nBlocks, nThreads>>>(devPtls, devStates, 
-                devAngTmp, ptlsNum, noise_pi);
+            // rotate the moving direction
+            particles_rotate<<<nBlocks, nThreads>>>(devPtls, devStates, 
+                    devAngTmp, ptlsNum, noise_pi);
 
-        if(t%delt==0) {
-            float odx, ody;
-            get_orderParameter(devPtls, ptlsNum, devVx, devVy,
-                    &odx, &ody, nBlocks, nThreads);
-            printf("%8d %18e %12d %+.12e, %+.12e\n", Lsize, noise, t, 
-                    odx/(double)ptlsNum, ody/(double)ptlsNum);
+            if(t%delt==0) {
+                float odx, ody;
+                get_orderParameter(devPtls, ptlsNum, devVx, devVy,
+                        &odx, &ody, nBlocks, nThreads);
+                printf("%8d %18e %12d %+.12e %+.12e\n", Lsize, noise, t, 
+                        odx/(double)ptlsNum, ody/(double)ptlsNum);
+            }
         }
-    }
+    //}
 
     cudaFree(devPtls) ; cudaFree(devStates); cudaFree(devAngTmp);
     cudaFree(devCell) ; cudaFree(devHead) ; cudaFree(devTail) ; 
